@@ -26,4 +26,35 @@ download_launches = BashOperator(
 
 
 def _get_pictures():
-    pathlib.Path("/tmp/launces")
+    pathlib.Path("/tmp/launces").mkdir(parents=True, exist_ok=True)
+    
+    with open("/tmp/launches.json") as f:
+        launches = json.load(f)
+        images_urls = [launch["image"] for launch in launches["results"]]
+        for image_url in images_urls:
+            try:
+                response = requests.get(image_url)
+                image_filname = image_url.split("/")[-1]
+                target_file = f"/tmp/images/{image_filname}"
+                
+                with open(target_file, "wb") as f:
+                    f.write(response.content)
+                print(f"Downloaded {image_url} to {target_file}")
+            except RequestException as e:
+                print(e)
+    
+    
+get_pictures = PythonOperator(
+    task_id="get_pictures",
+    python_callable=_get_pictures,
+    dag=dag,
+)
+
+
+notify = BashOperator(
+    task_id="notify",
+    bash_command='echo "There are now $(ls /tmp/images/ | wc -l) images."',
+    dag=dag,
+)
+
+download_launches >> get_pictures >> notify
